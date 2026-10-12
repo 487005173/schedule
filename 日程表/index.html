@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="学习积分日程表：任务清单 + 积分激励 + 番茄钟 + 多设备同步">
+<meta name="theme-color" content="#6d5efc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>学习积分日程表</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🎯</span>
+      <span id="brandName" class="brand-name">学习积分日程表</span>
+    </div>
+    <div id="topStats" class="top-stats"></div>
+    <div class="top-actions">
+      <button class="icon-btn" id="syncBtn" data-action="sync" data-mode="both" title="立即同步">⟳</button>
+      <button class="icon-btn" id="themeBtn" data-action="toggle-theme" title="切换深浅色">◐</button>
+    </div>
+  </header>
+
+  <div id="reminderBar" class="reminder-bar" hidden></div>
+
+  <main id="view" class="main"></main>
+
+  <nav id="tabbar" class="tabbar"></nav>
+  <button id="fab" class="fab" data-action="new-task" title="新建任务">＋</button>
+</div>
+
+<div id="sheet" class="sheet-backdrop" hidden>
+  <div class="sheet" id="sheetInner" role="dialog" aria-modal="true"></div>
+</div>
+<div id="toast" class="toast" hidden></div>
+<div id="confetti" class="confetti-layer" aria-hidden="true"></div>
+
+<script src="js/util.js?v=3"></script>
+<script src="js/store.js?v=3"></script>
+<script src="js/logic.js?v=3"></script>
+<script src="js/charts.js?v=3"></script>
+<script src="js/ics.js?v=3"></script>
+<script src="js/gist.js?v=3"></script>
+<script src="app.js?v=3"></script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>生成演示数据…</title>
+</head>
+<body>
+<p>正在生成本地演示数据…</p>
+<script src="../js/util.js"></script>
+<script src="../js/store.js"></script>
+<script>
+(function () {
+  var U = window.U, Store = window.Store;
+  var q = new URLSearchParams(location.search);
+  var theme = q.get('theme') || 'light';
+  var view = q.get('view') || 'today';
+
+  var st = Store.initialState();
+  st.settings.theme = theme;
+  st.settings.weeklyGoal = 1500;
+  st.settings.updatedAt = U.now();
+
+  st.categories.push({ id: 'cat-thesis', name: '毕业设计', color: '#7048e8', icon: '🎓', updatedAt: U.now(), deleted: false });
+
+  function task(o) {
+    return Object.assign({
+      id: U.uid('task'), title: '', points: 20, categoryId: null, date: '', time: '', repeat: null,
+      important: false, urgent: false, estimateMin: 30, note: '', link: '', tags: [], order: 0,
+      createdAt: U.now(), updatedAt: U.now(), deleted: false
+    }, o);
+  }
+  var today = U.today();
+
+  st.tasks = [
+    task({ title: '高等数学 第 5 章习题', points: 45, categoryId: 'cat-course', date: today, time: '08:00', estimateMin: 60, important: true, note: 'P128 第 3、7、11 题' }),
+    task({ title: '看网课：数据结构 · 树与二叉树', points: 30, categoryId: 'cat-course', date: today, time: '10:00', estimateMin: 60 }),
+    task({ title: '写代码：算法题 3 道', points: 40, categoryId: 'cat-code', date: today, time: '14:00', estimateMin: 75, important: true, link: 'https://leetcode.cn/problemset/' }),
+    task({ title: '背单词 150 个', points: 15, categoryId: 'cat-lang', date: U.addDays(today, -20), time: '16:00', repeat: { type: 'daily' }, estimateMin: 20 }),
+    task({ title: '六级听力精听 1 篇', points: 25, categoryId: 'cat-lang', date: today, time: '19:30', estimateMin: 45 }),
+    task({ title: '青协例会 + 整理纪要', points: 50, categoryId: 'cat-vol', date: today, time: '20:30', estimateMin: 45, urgent: true }),
+    task({ title: '毕设开题报告：写研究背景', points: 80, categoryId: 'cat-thesis', date: U.addDays(today, 1), estimateMin: 120, important: true }),
+    task({ title: '准备下周小组汇报 PPT', points: 60, categoryId: 'cat-course', date: U.addDays(today, 2), estimateMin: 90, important: true, urgent: true }),
+    task({ title: '交物理实验报告', points: 40, categoryId: 'cat-course', date: U.addDays(today, -2), estimateMin: 60, urgent: true }),
+    task({ title: '看技术文档：React 状态管理', points: 25, categoryId: 'cat-code', estimateMin: 40 }),
+    task({ title: '每周复盘 + 下周计划', points: 30, categoryId: 'cat-other', date: U.addDays(today, -3), repeat: { type: 'weekly', days: [0] }, estimateMin: 30 })
+  ];
+  /* 今天已完成 3 项 */
+  ['高等数学 第 5 章习题', '写代码：算法题 3 道', '背单词 150 个'].forEach(function (title) {
+    var t = st.tasks.filter(function (x) { return x.title === title; })[0];
+    var rec = {
+      id: t.id + (t.repeat ? '@' + today : ''), key: t.id, taskId: t.id, title: t.title, categoryId: t.categoryId,
+      date: today, at: new Date().toISOString(), base: t.points, bonusPercent: 15, bonus: Math.round(t.points * 0.15),
+      points: t.points + Math.round(t.points * 0.15), minutes: 0, type: 'task', updatedAt: U.now(), deleted: false
+    };
+    st.completions.push(rec);
+  });
+
+  /* 过去 21 天的历史记录，让统计图好看 */
+  var plan = [
+    ['背单词 150 个', 'cat-lang', 15, 20],
+    ['看网课：线性代数', 'cat-course', 30, 60],
+    ['写代码：算法题', 'cat-code', 40, 60],
+    ['六级听力精听', 'cat-lang', 25, 45],
+    ['青协值班', 'cat-vol', 50, 90],
+    ['毕设：读文献 2 篇', 'cat-thesis', 45, 60],
+    ['复习专业课一章', 'cat-course', 35, 45]
+  ];
+  for (var d = 1; d <= 21; d++) {
+    var date = U.addDays(today, -d);
+    var n = 2 + ((d * 3) % 4);           // 每天 2~5 项
+    if (d % 7 === 0) n = 1;              // 偶尔休息一天
+    for (var i = 0; i < n; i++) {
+      var p = plan[(d + i) % plan.length];
+      var pts = p[2] + (i % 2 ? 5 : 0);
+      st.completions.push({
+        id: U.uid('c'), key: U.uid('k'), taskId: U.uid('t'), title: p[0], categoryId: p[1], date: date,
+        at: date + 'T12:00:00.000Z', base: pts, bonusPercent: 0, bonus: 0, points: pts,
+        minutes: 0, type: 'task', updatedAt: U.now(), deleted: false
+      });
+    }
+    if (d % 3 === 0) {
+      st.pomodoros.push({
+        id: U.uid('pom'), taskId: null, date: date, at: date + 'T15:00:00.000Z', minutes: 25,
+        type: 'focus', points: 5, updatedAt: U.now(), deleted: false
+      });
+    }
+  }
+  /* 今天的番茄钟 */
+  for (var k = 0; k < 3; k++) {
+    st.pomodoros.push({
+      id: U.uid('pom'), taskId: null, date: today, at: new Date().toISOString(), minutes: 25,
+      type: 'focus', points: 5, updatedAt: U.now(), deleted: false
+    });
+  }
+  /* 一次兑换记录 */
+  st.redemptions.push({
+    id: U.uid('rd'), rewardId: 'rw-milktea', name: '一杯奶茶', cost: 200,
+    at: U.addDays(today, -2) + 'T18:00:00.000Z', date: U.addDays(today, -2), updatedAt: U.now(), deleted: false
+  });
+
+  localStorage.setItem(Store.KEY, JSON.stringify(st));
+  try { localStorage.removeItem('sps.fired'); } catch (e) { }
+  location.replace('../index.html#' + view);
+})();
+</script>
+</body>
+</html>

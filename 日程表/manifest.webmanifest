@@ -1,0 +1,24 @@
+{
+  "name": "学习积分日程表",
+  "short_name": "学习积分",
+  "description": "任务清单 + 积分激励 + 番茄钟 + 多设备同步的日程表",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#0f1020",
+  "theme_color": "#6d5efc",
+  "categories": ["productivity", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "今日任务", "url": "./index.html#today" },
+    { "name": "统计与热力图", "url": "./index.html#stats" },
+    { "name": "奖励商店", "url": "./index.html#shop" }
+  ]
+}

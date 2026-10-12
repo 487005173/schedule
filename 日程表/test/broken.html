@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>broken-assets</title>
+<script>
+  window.__errors = [];
+  window.onerror = function (m, s, l) { window.__errors.push('错误: ' + m + ' @' + l); };
+</script>
+<!-- 故意不引入 styles.css：用来验证程序能不能自己发现"样式没加载"并给出修复入口 -->
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand"><span class="logo">🎯</span><span id="brandName"></span></div>
+    <div id="topStats" class="top-stats"></div>
+    <div class="top-actions"><button class="icon-btn" id="syncBtn" data-action="sync" data-mode="both">⟳</button><button class="icon-btn" id="themeBtn" data-action="toggle-theme">◐</button></div>
+  </header>
+  <div id="reminderBar" class="reminder-bar" hidden></div>
+  <main id="view" class="main"></main>
+  <nav id="tabbar" class="tabbar"></nav>
+  <button id="fab" class="fab" data-action="new-task">＋</button>
+</div>
+<div id="sheet" class="sheet-backdrop" hidden><div class="sheet" id="sheetInner"></div></div>
+<div id="toast" class="toast" hidden></div>
+<div id="confetti" class="confetti-layer"></div>
+<pre id="smoke" style="position:fixed;left:-9999px"></pre>
+
+<script src="../js/util.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/logic.js"></script>
+<script src="../js/charts.js"></script>
+<script src="../js/ics.js"></script>
+<script src="../js/gist.js"></script>
+<script src="../app.js"></script>
+<script>
+(function () {
+  function q(s) { return document.querySelector(s); }
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var bar = q('#repairBar');
+      var hasBtn = bar && /一键修复/.test(bar.textContent);
+      var out = [
+        (bar ? '✓' : '✗') + ' 样式缺失时出现修复提示条',
+        (hasBtn ? '✓' : '✗') + ' 提示条里有"一键修复"按钮',
+        (bar && bar.getAttribute('style') && bar.getAttribute('style').indexOf('position:fixed') >= 0 ? '✓' : '✗') + ' 提示条自带内联样式（不依赖 styles.css）',
+        (q('#view').innerHTML.length > 800 ? '✓' : '✗') + ' 即使没有样式，程序本身仍能渲染',
+        (window.__errors.length === 0 ? '✓' : '✗') + ' 无脚本报错'
+      ];
+      var pass = out.filter(function (l) { return l.indexOf('✓') === 0; }).length;
+      document.getElementById('smoke').textContent =
+        'BROKEN_RESULT pass=' + pass + ' fail=' + (out.length - pass) + '\n' + out.join('\n') +
+        (window.__errors.length ? '\nERRORS:\n' + window.__errors.join('\n') : '');
+      document.title = 'BROKEN ' + pass + '/' + out.length;
+    }, 900);
+  });
+})();
+</script>
+</body>
+</html>

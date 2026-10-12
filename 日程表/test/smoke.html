@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>smoke</title>
+<script>
+  window.__errors = [];
+  window.onerror = function (m, s, l, c) { window.__errors.push('错误: ' + m + ' @' + (s || '').split('/').pop() + ':' + l); };
+  window.addEventListener('unhandledrejection', function (e) {
+    window.__errors.push('未处理的 Promise: ' + ((e.reason && e.reason.message) || e.reason));
+  });
+  window.confirm = function () { return true; };
+  window.alert = function () { };
+</script>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand"><span class="logo">🎯</span><span id="brandName"></span></div>
+    <div id="topStats" class="top-stats"></div>
+    <div class="top-actions"><button class="icon-btn" id="syncBtn" data-action="sync" data-mode="both">⟳</button><button class="icon-btn" id="themeBtn" data-action="toggle-theme">◐</button></div>
+  </header>
+  <div id="reminderBar" class="reminder-bar" hidden></div>
+  <main id="view" class="main"></main>
+  <nav id="tabbar" class="tabbar"></nav>
+  <button id="fab" class="fab" data-action="new-task">＋</button>
+</div>
+<div id="sheet" class="sheet-backdrop" hidden><div class="sheet" id="sheetInner"></div></div>
+<div id="toast" class="toast" hidden></div>
+<div id="confetti" class="confetti-layer"></div>
+<pre id="smoke" style="position:fixed;left:-9999px"></pre>
+
+<script src="../js/util.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/logic.js"></script>
+<script src="../js/charts.js"></script>
+<script src="../js/ics.js"></script>
+<script src="../js/gist.js"></script>
+<script src="../app.js"></script>
+<script>
+(function () {
+  var out = [], pass = 0, fail = 0;
+  function ok(name, cond, extra) {
+    if (cond) { pass++; out.push('✓ ' + name); }
+    else { fail++; out.push('✗ ' + name + (extra !== undefined ? ' → ' + JSON.stringify(extra) : '')); }
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function q(s) { return document.querySelector(s); }
+  function qa(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
+  function click(el) {
+    if (!el) throw new Error('元素不存在');
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  }
+  function setVal(el, v) {
+    el.value = v;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  /* 真实命中检测：模拟手指点击时，该位置最上层的元素是不是它自己
+     （能发现"被遮罩盖住点不动"这类只靠派发事件测不出来的 bug） */
+  function hit(selector) {
+    var el = q(selector);
+    if (!el) return false;
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+    var r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    var x = Math.min(Math.max(r.left + r.width / 2, 1), window.innerWidth - 1);
+    var y = Math.min(Math.max(r.top + r.height / 2, 1), window.innerHeight - 1);
+    var node = document.elementFromPoint(x, y);
+    return !!node && (node === el || el.contains(node) || node.contains(el));
+  }
+  function displayOf(sel) {
+    var el = q(sel);
+    return el ? getComputedStyle(el).display : 'missing';
+  }
+  function report() {
+    var text = 'SMOKE_RESULT pass=' + pass + ' fail=' + fail + '\n' + out.join('\n') +
+      '\nERRORS(' + window.__errors.length + '):\n' + window.__errors.join('\n');
+    document.getElementById('smoke').textContent = text;
+    document.title = 'SMOKE ' + pass + '/' + (pass + fail) + ' err=' + window.__errors.length;
+  }
+
+  async function run() {
+    localStorage.clear();
+    location.reload && null;
+    Store.replaceState(Store.initialState());
+
+    /* ---- 首屏 ---- */
+    ok('今日视图渲染出内容', q('#view').innerHTML.length > 800, q('#view').innerHTML.length);
+    ok('底部导航 7 个入口', qa('#tabbar .tab').length === 7, qa('#tabbar .tab').length);
+    ok('顶栏显示等级与积分', /Lv\.1/.test(q('#topStats').textContent) && /💰/.test(q('#topStats').textContent), q('#topStats').textContent);
+    ok('进度环已绘制', !!q('.ring-svg'));
+    ok('番茄钟卡片存在', !!q('#pomoClock'));
+    ok('空状态提示模板', qa('.quick-add .chip').length > 5, qa('.quick-add .chip').length);
+
+    /* ---- 点击可达性：保证没有浮层/遮罩挡住页面 ---- */
+    ok('弹层遮罩默认不显示', displayOf('#sheet') === 'none', displayOf('#sheet'));
+    ok('提醒条默认不显示', displayOf('#reminderBar') === 'none', displayOf('#reminderBar'));
+    ok('提示条默认不显示', displayOf('#toast') === 'none', displayOf('#toast'));
+    ok('悬浮＋按钮能真实点到', hit('#fab'));
+    ok('顶栏同步按钮能真实点到', hit('#syncBtn'));
+    ok('顶栏主题按钮能真实点到', hit('#themeBtn'));
+    ok('底部导航能真实点到', hit('#tabbar .tab'));
+    await sleep(600);
+    ok('样式正常时不弹"修复提示条"', !q('#repairBar'));
+
+    /* ---- 模板一键添加 ---- */
+    var before = Store.alive('tasks').length;
+    click(qa('.quick-add .chip')[0]);
+    await sleep(30);
+    ok('点模板后新增任务', Store.alive('tasks').length === before + 1, Store.alive('tasks').length);
+    ok('任务行出现在今日视图', qa('#view .task').length >= 1, qa('#view .task').length);
+    ok('任务行显示积分', /\+[\d,]+/.test(q('#view .task').textContent), q('#view .task').textContent);
+    ok('任务写入本地存储', !!localStorage.getItem(Store.KEY));
+    ok('任务行能真实点到', hit('#view .task'));
+    ok('任务勾选框能真实点到', hit('#view .task .check'));
+    ok('模板快捷按钮能真实点到', hit('.quick-add .chip'));
+
+    /* ---- 完成 / 取消完成 ---- */
+    click(q('#view .task .check'));
+    await sleep(30);
+    ok('完成后生成积分记录', Store.state.completions.filter(function (c) { return !c.deleted; }).length === 1);
+    var first = Store.state.completions[0];
+    ok('记录分值等于任务分值', first.points === Number(Store.alive('tasks')[0].points), { got: first.points, task: Store.alive('tasks')[0].points });
+    ok('完成后任务行变灰勾选', !!q('#view .task.done'));
+    ok('顶栏积分更新', /💰/.test(q('#topStats').textContent));
+    click(q('#view .task .check'));
+    await sleep(30);
+    ok('取消完成后记录作废', Store.state.completions.filter(function (c) { return !c.deleted; }).length === 0);
+    click(q('#view .task .check'));
+    await sleep(30);
+
+    /* ---- 一次性任务跨天不重复计数 ---- */
+    var t0 = Store.alive('tasks')[0];
+    ok('同一任务同日只算一次分', Logic.earnedOn(Store.state, U.today()) === Number(t0.points), Logic.earnedOn(Store.state, U.today()));
+
+    /* ---- 番茄钟 ---- */
+    var clockBefore = q('#pomoClock').textContent;
+    click(q('[data-action="pomo-start"]'));
+    await sleep(1200);
+    var clockAfter = q('#pomoClock') ? q('#pomoClock').textContent : '';
+    ok('番茄钟开始后倒计时', clockBefore !== clockAfter, { before: clockBefore, after: clockAfter });
+    click(q('[data-action="pomo-pause"]'));
+    await sleep(20);
+    click(q('[data-action="pomo-preset"][data-preset="50/10"]'));
+    await sleep(30);
+    ok('切换 50/10 后时钟为 50:00', q('#pomoClock') && q('#pomoClock').textContent === '50:00', q('#pomoClock') && q('#pomoClock').textContent);
+    click(q('[data-action="pomo-preset"][data-preset="25/5"]'));
+    await sleep(20);
+    /* 直接结束一段专注，验证加分 */
+    var ptsBefore = Logic.earnedTotal(Store.state);
+    Store.state.settings.pomodoro.award = 5;
+    Logic.addPomodoro(Store.state, { minutes: 25, type: 'focus' });
+    Store.touch();
+    ok('番茄钟加分计入总分', Logic.earnedTotal(Store.state) === ptsBefore + 5, Logic.earnedTotal(Store.state) - ptsBefore);
+
+    /* ---- 新建任务弹层 ---- */
+    click(q('#fab'));
+    await sleep(40);
+    ok('新建弹层打开', q('#sheet').hidden === false && !!q('#f-title'));
+    ok('弹层打开后遮罩显示为 flex', displayOf('#sheet') === 'flex', displayOf('#sheet'));
+    ok('弹层输入框能真实点到', hit('#f-title'));
+    ok('弹层遮罩没有挡住弹层自身', hit('#sheetInner'));
+    ok('弹层有快捷分值按钮', qa('.quick-pts .chip').length === 8, qa('.quick-pts .chip').length);
+    setVal(q('#f-title'), '复习数据结构第三章');
+    click(q('[data-action="set-pts"][data-pts="40"]'));
+    setVal(q('#f-time'), '19:30');
+    var repSel = q('#f-repeat');
+    setVal(repSel, 'weekly');
+    await sleep(20);
+    ok('选每周后出现星期选择器', q('#row-days').classList.contains('hidden') === false);
+    click(q('[data-action="toggle-day-pick"][data-day="1"]'));
+    click(q('[data-action="toggle-day-pick"][data-day="3"]'));
+    click(q('[data-action="toggle-important"]'));
+    await sleep(10);
+    click(q('[data-action="save-task"]'));
+    await sleep(40);
+    var saved = Store.alive('tasks').filter(function (t) { return t.title === '复习数据结构第三章'; })[0];
+    ok('重复任务已保存', !!saved, Store.alive('tasks').length);
+    ok('重复规则正确', saved && saved.repeat.type === 'weekly' && saved.repeat.days.join() === '1,3', saved && saved.repeat);
+    ok('积分与时间已保存', saved && saved.points === 40 && saved.time === '19:30', saved && { p: saved.points, t: saved.time });
+    ok('重要标记已保存', saved && saved.important === true);
+    ok('弹层已关闭', q('#sheet').hidden === true);
+    ok('关闭后遮罩恢复隐藏', displayOf('#sheet') === 'none', displayOf('#sheet'));
+    ok('关闭后任务行又能点到', hit('#view .task'));
+    var nx = Logic.nextDate(Store.state, saved, U.today());
+    ok('能算出下次出现日期（周一或周三）', nx && [1, 3].indexOf(U.weekday(nx)) >= 0, nx);
+
+    /* ---- 编辑与删除 ---- */
+    ui_edit: {
+      var rows = qa('#view .task');
+      click(rows[rows.length - 1]);
+      await sleep(40);
+      ok('点任务行打开编辑弹层', q('#sheet').hidden === false && !!q('#f-title'));
+      ok('编辑弹层带删除按钮', !!q('[data-action="del-task"]'));
+      setVal(q('#f-title'), '改过的标题');
+      click(q('[data-action="save-task"]'));
+      await sleep(40);
+      ok('编辑后标题已更新', Store.alive('tasks').some(function (t) { return t.title === '改过的标题'; }));
+    }
+
+    /* ---- 各视图切换 ---- */
+    var views = ['week', 'month', 'list', 'stats', 'shop', 'settings', 'today'];
+    for (var i = 0; i < views.length; i++) {
+      click(q('[data-action="tab"][data-view="' + views[i] + '"]'));
+      await sleep(50);
+      var len = q('#view').innerHTML.length;
+      ok('视图 ' + views[i] + ' 有内容且无报错', len > 400, len);
+    }
+    click(q('[data-action="tab"][data-view="month"]'));
+    await sleep(40);
+    ok('月历 42 个格子', qa('.cal-cell').length === 42, qa('.cal-cell').length);
+    click(q('[data-action="tab"][data-view="stats"]'));
+    await sleep(40);
+    ok('统计页有柱状图', qa('.bar-col').length >= 7, qa('.bar-col').length);
+    ok('统计页有热力图 84 格', qa('.heat-cell').length >= 84, qa('.heat-cell').length);
+    ok('统计页有周报进度环', !!q('.ring-svg'));
+    click(q('[data-action="tab"][data-view="week"]'));
+    await sleep(40);
+    ok('周视图 7 天卡片', qa('.day-card').length === 7, qa('.day-card').length);
+    click(q('[data-action="tab"][data-view="list"]'));
+    await sleep(40);
+    ok('清单页有搜索框', !!q('#listSearch'));
+    setVal(q('#listSearch'), '数据结构');
+    await sleep(320);
+    ok('搜索能过滤任务', qa('#view .task').length >= 1 && q('#view').innerHTML.indexOf('数据结构') >= 0);
+    setVal(q('#listSearch'), 'zzz不存在zzz');
+    await sleep(320);
+    ok('搜索无结果时提示', q('#view').textContent.indexOf('没有符合条件') >= 0);
+
+    /* ---- 月历点某天打开日详情 ---- */
+    click(q('[data-action="tab"][data-view="month"]'));
+    await sleep(40);
+    click(qa('.cal-cell')[20]);
+    await sleep(40);
+    ok('点日期打开当天弹层', q('#sheet').hidden === false && /年/.test(q('#sheetInner').textContent));
+    click(q('[data-action="close-sheet"]'));
+    await sleep(20);
+
+    /* ---- 商店：赚分并兑换 ---- */
+    click(q('[data-action="tab"][data-view="shop"]'));
+    await sleep(40);
+    ok('商店显示奖励卡片', qa('.shop-item').length >= 5, qa('.shop-item').length);
+    var bigTask = { id: 'boost', title: '攒分', points: 2000, date: U.today(), tags: [], order: 0, deleted: false };
+    Store.put('tasks', bigTask);
+    Logic.completeTask(Store.state, Logic.taskById(Store.state, 'boost'), U.today());
+    Store.touch();
+    click(q('[data-action="tab"][data-view="shop"]'));
+    await sleep(40);
+    var availBefore = Logic.totals(Store.state).available;
+    click(q('[data-action="redeem"]'));
+    await sleep(60);
+    ok('兑换后可用积分减少', Logic.totals(Store.state).available < availBefore, { before: availBefore, after: Logic.totals(Store.state).available });
+    ok('兑换记录出现', qa('.history-row').length >= 1);
+    var undoBtn = q('[data-action="undo-redeem"]');
+    if (undoBtn) { click(undoBtn); await sleep(60); }
+    ok('撤销兑换后积分退回', Logic.totals(Store.state).available === availBefore, Logic.totals(Store.state).available);
+
+    /* ---- 设置项联动 ---- */
+    click(q('[data-action="tab"][data-view="settings"]'));
+    await sleep(50);
+    ok('设置页有目标积分输入', !!q('[data-path="settings.weeklyGoal"]'));
+    setVal(q('[data-path="settings.weeklyGoal"]'), '2000');
+    await sleep(50);
+    ok('改周目标后生效', Store.state.settings.weeklyGoal === 2000, Store.state.settings.weeklyGoal);
+    ok('改周目标后每日目标自动跟随', Logic.dailyGoal(Store.state) === Math.round(2000 / 7), Logic.dailyGoal(Store.state));
+    setVal(q('[data-path="settings.weeklyGoal"]'), '1500');
+    await sleep(30);
+    setVal(q('[data-path="settings.streak.enabled"]'), false);
+    q('[data-path="settings.streak.enabled"]').checked = false;
+    q('[data-path="settings.streak.enabled"]').dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(30);
+    ok('可关闭连击加成', Store.state.settings.streak.enabled === false);
+    click(q('[data-action="set-accent"][data-color="#0ca678"]'));
+    await sleep(30);
+    ok('主色切换生效', Store.state.settings.accent === '#0ca678' && document.documentElement.style.getPropertyValue('--accent').trim() === '#0ca678');
+    setVal(q('[data-path="settings.theme"]'), 'dark');
+    await sleep(30);
+    ok('深色主题生效', document.documentElement.getAttribute('data-theme') === 'dark');
+    setVal(q('[data-path="settings.theme"]'), 'auto');
+    await sleep(20);
+    ok('新增分类按钮存在', !!q('[data-action="new-category"]'));
+    click(q('[data-action="new-category"]'));
+    await sleep(40);
+    setVal(q('#c-name'), '毕业设计');
+    click(q('[data-action="save-category"]'));
+    await sleep(50);
+    ok('分类已新增', Store.alive('categories').some(function (c) { return c.name === '毕业设计'; }));
+    click(q('[data-action="new-template"]'));
+    await sleep(40);
+    setVal(q('#t-name'), '写周报');
+    setVal(q('#t-points'), '25');
+    click(q('[data-action="save-template"]'));
+    await sleep(50);
+    ok('模板已新增', Store.alive('templates').some(function (t) { return t.name === '写周报' && t.points === 25; }));
+
+    /* ---- 导出功能 ---- */
+    var ics = ICS.build(Store.state, { days: 30 });
+    ok('ICS 含日历头', ics.indexOf('BEGIN:VCALENDAR') === 0 && ics.indexOf('END:VCALENDAR') > 0);
+    ok('ICS 含带时间的任务', ics.indexOf('19:30'.replace(':', '')) > 0 || ics.indexOf('T193000') > 0, ics.slice(0, 0));
+    ok('ICS 含每日提醒 RRULE', ics.indexOf('RRULE:FREQ=DAILY') > 0);
+    ok('ICS 含提前 10 分钟提醒', ics.indexOf('TRIGGER:-PT10M') > 0);
+    ok('ICS 行都遵守 75 字节折行', ics.split('\r\n').every(function (l) { return ICS.byteLen(l) <= 75; }));
+    var payload = JSON.stringify(Store.toPayload());
+    ok('可以导出 JSON 备份', payload.length > 200 && payload.indexOf('study-points-schedule') > 0);
+
+    /* ---- 数据健壮性 ---- */
+    var st = Store.state;
+    ok('任务数正确', Store.alive('tasks').length >= 3, Store.alive('tasks').length);
+    ok('无控制台错误', window.__errors.length === 0, window.__errors);
+    report();
+    document.body.setAttribute('data-smoke-done', '1');
+  }
+
+  window.addEventListener('load', function () {
+    run().catch(function (e) {
+      window.__errors.push('测试脚本异常: ' + (e && e.message));
+      report();
+      document.body.setAttribute('data-smoke-done', '1');
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>vp</title></head>
+<body style="font:16px sans-serif">
+<pre id="vp"></pre>
+<script>
+document.getElementById('vp').textContent =
+  'innerWidth=' + window.innerWidth +
+  '\ninnerHeight=' + window.innerHeight +
+  '\nouterWidth=' + window.outerWidth +
+  '\ndpr=' + window.devicePixelRatio +
+  '\nclientWidth=' + document.documentElement.clientWidth +
+  '\nmatchMedia900=' + window.matchMedia('(min-width: 900px)').matches;
+</script>
+</body></html>
